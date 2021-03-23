@@ -1,0 +1,24 @@
+{{- if .Values.grafana.sidecar.dashboards.enabled }}
+{{- $files := .Files.Glob "dashboards/json/**.json" }}
+{{- if $files }}
+apiVersion: v1
+kind: ConfigMapList
+items:
+{{- range $path, $fileContents := $files }}
+{{- $dashboardName := regexReplaceAll "(^.*/)(.*)\\.json$" $path "${2}" }}
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: {{ printf "%s-%s" (include "monitoring-stack.fullname" $) $dashboardName | trunc 63 | trimSuffix "-" }}
+    namespace: {{ $.Release.Namespace }}
+    labels:
+      {{- if $.Values.grafana.sidecar.dashboards.label }}
+      {{ $.Values.grafana.sidecar.dashboards.label }}: "{{ $.Values.grafana.sidecar.dashboards.labelValue }}"
+      {{- end }}
+      app: prometheus-grafana
+  data:
+    {{ $dashboardName }}.json: |-
+      {{- $fileContents | toString | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- end }}

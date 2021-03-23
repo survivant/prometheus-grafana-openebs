@@ -1,0 +1,26 @@
+apiVersion: v2
+appVersion: "1.0"
+name: monitoring-stack
+version: 0.0.1
+description: A Helm chart for Monitoring stack
+maintainers:
+#home: https://bitbucket.comact.com/im/kubernetes-api.git
+icon: http://interne.comact.com/bid-interne.png
+#sources:
+#  - https://bitbucket.comact.com/im/kubernetes-api.git
+dependencies:
+  - name: prometheus
+    version: 13.6.0
+    #repository: "@prometheus-community"
+  - name: grafana
+    version: 6.6.3
+    repository: "@grafana"
+  - name: prometheus-node-exporter
+    repository: "@prometheus-community"
+    version: 1.16.2
+    condition: nodeExporter.enabled
+  - name: alertmanager
+    repository: "@prometheus-community"
+    version: 0.8.0
+    condition: alertmanager.enabled
+

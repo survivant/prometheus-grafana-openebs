@@ -1,0 +1,110 @@
+- job_name: 'prometheusOpenEBS'
+  scheme: http
+  kubernetes_sd_configs:
+    - role: pod
+  relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_label_name]
+      regex: openebs-prometheus-server
+      action: keep
+    - source_labels: [__meta_kubernetes_pod_name]
+      action: replace
+      target_label: kubernetes_pod_name
+- job_name: 'openebs-volumes'
+  scheme: http
+  kubernetes_sd_configs:
+    - role: pod
+  relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_label_monitoring]
+      regex: volume_exporter_prometheus
+      action: keep
+    - source_labels: [__meta_kubernetes_pod_name]
+      action: replace
+      target_label: kubernetes_pod_name
+    # Below entry ending with vsm is deprecated and is maintained for
+    # backward compatibility purpose.
+    - source_labels: [__meta_kubernetes_pod_label_vsm]
+      action: replace
+      target_label: openebs_pv
+    # Below entry is the correct entry. Though the above and below entries
+    # are having same target_label as openebs_pv, only one of them will be
+    # valid for any release.
+    - source_labels: [__meta_kubernetes_pod_label_openebs_io_persistent_volume]
+      action: replace
+      target_label: openebs_pv
+    - source_labels: [__meta_kubernetes_pod_label_openebs_io_persistent_volume_claim]
+      action: replace
+      target_label: openebs_pvc
+    - source_labels: [__meta_kubernetes_pod_container_port_number]
+      action: drop
+      regex: '(.*)9501'
+    - source_labels: [__meta_kubernetes_pod_container_port_number]
+      action: drop
+      regex: '(.*)3260'
+    - source_labels: [__meta_kubernetes_pod_container_port_number]
+      action: drop
+      regex: '(.*)80'
+- job_name: 'pv-exporter'
+  kubernetes_sd_configs:
+    - role: pod
+  relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_label_app]
+      regex: pv-exporter
+      action: keep
+  metric_relabel_configs:
+    - source_labels: [__name__]
+      regex: '(pv_capacity_bytes|pv_utilization_bytes)'
+      action: keep
+    - source_labels: [persistentvolume]
+      action: replace
+      target_label: openebs_pv
+    - source_labels: [persistentvolumeclaim]
+      action: replace
+      target_label: openebs_pv
+- job_name: 'openebs-pools'
+  scheme: http
+  kubernetes_sd_configs:
+    - role: pod
+  relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_annotation_openebs_io_monitoring]
+      regex: pool_exporter_prometheus
+      action: keep
+      # Adding comma-separated source_labels below in order to fetch the metrics for pool claim instances of SPC and CSPC kind
+    - source_labels: [__meta_kubernetes_pod_label_openebs_io_storage_pool_claim, __meta_kubernetes_pod_label_openebs_io_cstor_pool_cluster]
+      action: replace
+      # separator: Separator placed between concatenated source label values, default -> ;
+      separator: ''
+      target_label: storage_pool_claim
+      # Adding comma-separated source_labels below in order to fetch the metrics for pool instances of CSP and CSPI kind
+    - source_labels: [__meta_kubernetes_pod_label_openebs_io_cstor_pool, __meta_kubernetes_pod_label_openebs_io_cstor_pool_instance]
+      action: replace
+      # separator: Separator placed between concatenated source label values, default -> ;
+      separator: ''
+      target_label: cstor_pool
+    - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+      action: replace
+      regex: ([^:]+)(?::\d+)?;(\d+)
+      replacement: ${1}:${2}
+      target_label: __address__
+- job_name: 'node'
+  tls_config:
+    ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+  bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+  kubernetes_sd_configs:
+    - role: node
+  relabel_configs:
+    - action: labelmap
+      regex: __meta_kubernetes_node_label_(.+)
+    - source_labels: [__meta_kubernetes_role]
+      action: replace
+      target_label: kubernetes_role
+    - source_labels: [__address__]
+      regex: '(.*):10250'
+      replacement: '${1}:9100'
+      target_label: __address__
+    - source_labels: [__meta_kubernetes_node_label_kubernetes_io_hostname]
+      target_label: __instance__
+    - source_labels: [job]
+      regex: 'kubernetes-(.*)'
+      replacement: '${1}'
+      target_label: name
+

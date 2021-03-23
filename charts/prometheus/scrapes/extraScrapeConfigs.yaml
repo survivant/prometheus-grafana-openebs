@@ -1,0 +1,5 @@
+- job_name: 'armeria-metrics'
+  scrape_interval: 1s
+  metrics_path: /internal/metrics
+  kubernetes_sd_configs:
+    - role: endpoints

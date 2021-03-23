@@ -1,0 +1,61 @@
+#https://github.com/openebs/openebs/blob/master/k8s/openebs-monitoring-pg.yaml
+groups:
+  - name: CPU
+    rules:
+      - alert: High CPU Load
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 1m
+        labels:
+          team: devops
+        annotations:
+          summary: "High CPU load (instance {{ $labels.instance }})"
+          description: "CPU load is > 80%\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+  - name: Memory
+    rules:
+      - alert: High Memory Utiliation
+        expr: (node_memory_MemFree_bytes + node_memory_Cached_bytes + node_memory_Buffers_bytes) / node_memory_MemTotal_bytes * 100 < 15
+        for: 1m
+        labels:
+          team: devops
+        annotations:
+          summary: "Out of Memory (instance {{ $labels.instance }})"
+          description: "Memory is filling up (< 10% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+  - name: Filesystem
+    rules:
+      - alert: No Root Disk Space Left
+        expr: node_filesystem_free_bytes{mountpoint ="/"} / node_filesystem_size_bytes{mountpoint ="/"} * 100 < 10
+        for: 1m
+        labels:
+          team: devops
+        annotations:
+          summary: "Out of disk root space (instance {{ $labels.instance }})"
+          description: "Root Disk is almost full (< 10% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+      - alert: No Mounted Disk Space Left
+        expr: node_filesystem_free_bytes{mountpoint !="/"} / node_filesystem_size_bytes{mountpoint !="/"} * 100 < 10
+        for: 1m
+        labels:
+          team: devops
+        annotations:
+          summary: "Out of mounted disk space (instance {{ $labels.instance }})"
+          description: "Mounted Disk is almost full (< 10% left) \n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+  - name: Kubernetes
+    rules:
+      - alert: Pod CrashLoopBackOff
+        expr: kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"} > 0
+        for: 1m
+        labels:
+          team: devops
+        annotations:
+          summary: "Pod '{{$labels.pod}}' in namespace '{{$labels.namespace}}' is in CrashLoopBackOff"
+          description: "A container named '{{$labels.container}}' in the pod '{{$labels.pod}}' in namespace '{{$labels.namespace}}' is experiencing restarts"
+
+  - name: OpenEBS
+    rules:
+      - alert: OpenEBS Volume Not Available
+        expr: openebs_volume_status == 1 or openebs_volume_status == 4
+        for: 1m
+        labels:
+          team: devops
+        annotations:
+          summary: "Volume '{{ $labels.openebs_pv }}' created for claim '{{ $labels.openebs_pvc }}' is not available"
+          description: "Volume '{{ $labels.openebs_pv }}' if offline, either because replica quorum is not met, target is not running or backend storage is lost"

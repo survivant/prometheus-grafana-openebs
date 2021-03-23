@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-custom-rules
+data:
+{{- $files := .Files.Glob "rules/**.yaml" }}
+{{- if $files }}
+{{- range $path, $fileContents := $files }}
+  {{ $path | regexFind "[^/]+$" -}}: |
+{{- $fileContents | toString | nindent 4 }}
+{{- end }}
+{{- end }}

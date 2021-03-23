@@ -1,0 +1,275 @@
+alertmanager:
+  enabled: false
+
+  ingress:
+    enabled: true
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+      nginx.ingress.kubernetes.io/rewrite-target: /$2
+    hosts:
+      - host: ""
+        paths:
+          - /alertmanager(/|$)(.*)
+
+    persistentVolume:
+      enabled: true
+      accessModes:
+        - ReadWriteOnce
+      mountPath: /data
+      size: 2Gi
+      storageClass: local-path
+
+    service:
+      nodePort: 30005
+      type: NodePort
+
+## Deploy node exporter as a daemonset to all nodes
+##
+nodeExporter:
+  enabled: true
+
+  ## Use the value configured in prometheus-node-exporter.podLabels
+  ##
+  jobLabel: jobLabel
+
+  serviceMonitor:
+    ## Scrape interval. If not set, the Prometheus default scrape interval is used.
+    ##
+    interval: ""
+
+    ## How long until a scrape request times out. If not set, the Prometheus default scape timeout is used.
+    ##
+    scrapeTimeout: ""
+
+    ## 	metric relabel configs to apply to samples before ingestion.
+    ##
+    metricRelabelings: []
+    # - sourceLabels: [__name__]
+    #   separator: ;
+    #   regex: ^node_mountstats_nfs_(event|operations|transport)_.+
+    #   replacement: $1
+    #   action: drop
+
+    ## 	relabel configs to apply to samples before ingestion.
+    ##
+    relabelings: []
+    # - sourceLabels: [__meta_kubernetes_pod_node_name]
+    #   separator: ;
+    #   regex: ^(.*)$
+    #   targetLabel: nodename
+    #   replacement: $1
+    #   action: replace
+
+## Configuration for prometheus-node-exporter subchart
+##
+prometheus-node-exporter:
+  namespaceOverride: ""
+  podLabels:
+    ## Add the 'node-exporter' label to be used by serviceMonitor to match standard common usage in rules and grafana dashboards
+    ##
+    jobLabel: node-exporter
+  extraArgs:
+    - --collector.filesystem.ignored-mount-points=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+    - --collector.filesystem.ignored-fs-types=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$
+    - --collector.systemd
+    - --collector.processes
+
+
+grafana:
+  enabled: true
+  service:
+    #type: ClusterIP
+    type: NodePort
+    port: 80
+    targetPort: 3000
+    nodePort: 30006
+
+  ingress:
+    enabled: true
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+      nginx.ingress.kubernetes.io/rewrite-target: /$2
+    path: /grafana(/|$)(.*)
+    hosts: []
+
+  persistence:
+    type: pvc
+    enabled: true
+    storageClassName: local-path
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+
+  testFramework:
+    enabled: false
+  serviceMonitor:
+    selfMonitor: false
+
+  # Administrator credentials when not using an existing secret (see below)
+  adminUser: admin
+  adminPassword: admin
+
+  sidecar:
+    dashboards:
+      enabled: true
+      # label that the configmaps with dashboards are marked with
+      label: grafana_dashboard
+      # value of label that the configmaps with dashboards are set to
+      labelValue: "1"
+    datasources:
+      enabled: true
+
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-server:9090
+          access: proxy
+          isDefault: true
+        - name: DS_OPENEBS_PROMETHEUS
+          type: prometheus
+          url: http://prometheus-server:9090
+          access: proxy
+
+  plugins:
+   - digrich-bubblechart-panel
+   - grafana-clock-panel
+   - grafana-piechart-panel
+
+prometheus:
+  nameOverride: "prometheus"
+
+  alertmanager:
+    enabled: true
+
+    ingress:
+      enabled: false
+
+    persistentVolume:
+      enabled: true
+      accessModes:
+        - ReadWriteOnce
+      mountPath: /data
+      size: 2Gi
+      storageClass: local-path
+
+    service:
+      nodePort: 30005
+      type: NodePort
+
+  kubeStateMetrics:
+    enabled: true
+
+  nodeExporter:
+    enabled: false
+
+  server:
+    enabled: true
+    fullnameOverride: "prometheus-server"
+
+    global:
+      ## How frequently to scrape targets by default
+      ##
+      scrape_interval: 30s
+      ## How long until a scrape request times out
+      ##
+      scrape_timeout: 10s
+      ## How frequently to evaluate rules
+      ##
+      evaluation_interval: 45s
+
+    ingress:
+      enabled: false
+
+    persistentVolume:
+      enabled: true
+      accessModes:
+        - ReadWriteOnce
+      mountPath: /data
+      size: 8Gi
+      storageClass: local-path
+
+    service:
+      servicePort: 9090
+      port: 9090
+      nodePort: 30004
+      type: NodePort
+
+    extraConfigmapMounts:
+      - name: prometheus-custom-rules
+        mountPath: /etc/config/custom-rules
+        configMap: prometheus-custom-rules
+        readOnly: false
+
+  pushgateway:
+    enabled: true
+
+  ## alertmanager ConfigMap entries
+  ##
+  alertmanagerFiles:
+    alertmanager.yml:
+      receivers:
+        - name: default-receiver
+          webhook_configs:
+            - url: "https://webhook.site/0606f7ef-b03d-41e4-8e1a-2f004949d1ba"
+
+      route:
+        group_wait: 10s
+        group_interval: 30s
+        receiver: default-receiver
+        repeat_interval: 45s
+
+# move those rules into /rules/custom
+#  serverFiles:
+#    alerts:
+#      groups:
+#        - name: Instances
+#          rules:
+#            - alert: InstanceDown
+#              expr: up == 0
+#              for: 10s
+#              labels:
+#                severity: page
+#              annotations:
+#                description: '{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minute.'
+#                summary: 'Instance {{ $labels.instance }} down'
+  serverFiles:
+    prometheus.yml:
+      rule_files:
+        - /etc/config/recording_rules.yml
+        - /etc/config/alerting_rules.yml
+        ## Below two files are DEPRECATED will be removed from this default values file
+        - /etc/config/rules
+        - /etc/config/alerts
+        - /etc/config/custom-rules/*.yaml
+#  configmapReload:
+#    prometheus:
+#      extraConfigmapMounts:
+#        - name: prometheus-custom-alerts
+#          mountPath: /etc/config/custom-alerts
+#          configMap: prometheus-custom-alerts
+#          readOnly: false
+
+  extraScrapeConfigs: |
+    {{ include "extraScrapeConfigsFiles" $ }}
+
+# move those config into /scrapes/extraScapeConfigs.yaml
+#  extraScrapeConfigs: |
+#   - job_name: 'prometheus-blackbox-exporter22'
+#     metrics_path: /probe
+#     params:
+#       module: [http_2xx]
+#     static_configs:
+#       - targets:
+#         - https://example.com
+#     relabel_configs:
+#       - source_labels: [__address__]
+#         target_label: __param_target
+#       - source_labels: [__param_target]
+#         target_label: instance
+#       - target_label: __address__
+#         replacement: prometheus-blackbox-exporter:9115
+
+

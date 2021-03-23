@@ -1,0 +1,19 @@
+{{- define "test" -}}
+{{- printf "%s" "labels:" -}}
+{{- if $.Values.grafana.sidecar.dashboards.label }}
+{{- printf "%s: \"%s\"" .Values.grafana.sidecar.dashboards.label .Values.grafana.sidecar.dashboards.labelValue | nindent 9 -}}
+{{- printf "%s" "app: prometheus-grafana" | nindent 9 -}}
+{{- end }}
+{{- end }}
+
+{{- if .Values.grafana.sidecar.dashboards.enabled }}
+{{- $files := .Files.Glob "dashboards/yaml/**.yaml" }}
+{{- if $files }}
+
+
+
+{{- range $path, $fileContents := $files }}
+{{- $fileContents | toString | nindent 1 | replace "namespace: monitoring"  (include "test" $ ) }}
+{{- end }}
+{{- end }}
+{{- end }}
