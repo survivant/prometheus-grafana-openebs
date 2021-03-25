@@ -1,27 +1,35 @@
 alertmanager:
   enabled: false
 
+#  ingress:
+#    enabled: true
+#    annotations:
+#      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+#      nginx.ingress.kubernetes.io/rewrite-target: /$2
+#    hosts:
+#      - host: ""
+#        paths:
+#          - /alertmanager(/|$)(.*)
+
   ingress:
     enabled: true
     annotations:
       nginx.ingress.kubernetes.io/ssl-redirect: "false"
       nginx.ingress.kubernetes.io/rewrite-target: /$2
-    hosts:
-      - host: ""
-        paths:
-          - /alertmanager(/|$)(.*)
+    path: /alertmanager(/|$)(.*)
+    hosts: []
 
-    persistentVolume:
-      enabled: true
-      accessModes:
-        - ReadWriteOnce
-      mountPath: /data
-      size: 2Gi
-      storageClass: local-path
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    mountPath: /data
+    size: 2Gi
+     storageClass: local-path
 
-    service:
-      nodePort: 30005
-      type: NodePort
+  service:
+    nodePort: 30005
+    type: NodePort
 
 ## Deploy node exporter as a daemonset to all nodes
 ##
@@ -91,6 +99,10 @@ grafana:
       nginx.ingress.kubernetes.io/rewrite-target: /$2
     path: /grafana(/|$)(.*)
     hosts: []
+
+  grafana.ini:
+    server:
+      root_url: http://localhost:3000/grafana
 
   persistence:
     type: pvc
